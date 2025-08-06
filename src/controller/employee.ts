@@ -5,6 +5,7 @@ import { Professional } from '../models/employees/employee.professional';
 import { Employee } from '../models/employees/employee';
 import { BankDetails } from '../models/employees/employee.bankDetails';
 import { Loan, LoanStatus } from '../models/loan';
+import { JOB } from '../models/employees/employee.job';
 
 
 const generalCollection = collection(db, 'general');
@@ -13,7 +14,7 @@ const employeeCollection = collection(db, 'employees')
 const bankDetailsCollection = collection(db, 'bankDetails')
 const pfCollection = collection(db, 'pfDetails')
 const loanCollection = collection(db, 'loanDetails')
-
+const previousCollection = collection(db,'previousJobs')
 const departmentPrefixMap: Record<string, string> = {
   "HR": "HR",
   "Finance": "FN",
@@ -127,7 +128,7 @@ export const deleteEmployee = async (id: string) => {
     isDeleted: true
   })
   await batch.commit();
-  return{
+  return {
     message: "employee deleted"
   }
 }
@@ -155,21 +156,44 @@ export const editGeneralInfo = async (id: string, updateData: Partial<General>) 
   if (!snap.exists()) throw new Error("General info not found");
 
   await updateDoc(ref, updateData);
-  return { message: "General info updated successfully"};
+  return { message: "General info updated successfully" };
 };
 
 export const changeStatus = async (id: string, status: string) => {
   const data = await getEmployeeById(id)
   const generalId = data.generalId;
+  const professinalId = data.professionalId
+
   const genneralRef = doc(generalCollection, generalId);
+  const professionalRef = doc(professionalCollection, professinalId)
   const batch = writeBatch(db);
   batch.update(genneralRef, {
     status
   })
   await batch.commit();
-  return{
-    message:"change status"
-  }
+  // return{
+  //   message:"change status"
+  // }
+  const [generalSnap, professionalSnap] = await Promise.all([
+    getDoc(genneralRef),
+    getDoc(professionalRef),
+  ]);
+  const general = generalSnap.exists() ? generalSnap.data() : null;
+  const professional = professionalSnap.exists() ? professionalSnap.data() : null;
+  if (!general || !professional) return null;
+
+  return {
+    id: id,
+    employeeCode: general.empCode,
+    employeeName: `${general.name?.first || ''} ${general.name?.last || ''}`.trim(),
+    joiningDate: professional.joiningDate,
+    designation: professional.designation,
+    department: professional.department,
+    location: professional.location,
+    gender: general.gender,
+    status: general.status,
+    payslipComponent: professional.payslipComponent
+  };
 }
 
 export const editProfessionalInfo = async (id: string, updateData: Partial<Professional>) => {
@@ -178,7 +202,7 @@ export const editProfessionalInfo = async (id: string, updateData: Partial<Profe
   if (!snap.exists()) throw new Error("Professoinal info not found");
 
   await updateDoc(ref, updateData);
-  return { message: "Professional info updated successfully"};
+  return { message: "Professional info updated successfully" };
 };
 
 export const addBankDetails = async (Id: string, data: Partial<BankDetails>) => {
@@ -445,40 +469,47 @@ export const editLoan = async (id: string, data: { amountApp?: string, installme
   return { message: "Loan info updated successfully" };
 }
 
-// export const uploadProfilePicture = async (empCode: string, file: Express.Multer.File) => {
-//   if (!file) throw new Error('No file provided');
+export const addPreviousJob = async (empId: string, job: JOB) => {
+  const employeeRef = doc(employeeCollection, empId);
+  const employeeSnap = await getDoc(employeeRef);
 
-//   const generalCollection = collection(db, 'general');
-//   const q = query(generalCollection, where('empCode', '==', empCode));
-//   const snap = await getDocs(q);
+  if (!employeeSnap.exists()) {
+    throw new Error('Employee not found');
+  }
 
-//   if (snap.empty) {
-//     throw new Error('Employee not found');
-//   }
+  const jobRef = doc(previousCollection); // Auto-ID
+  const jobWithId = { id: jobRef.id, ...job };
+  const employeeData = employeeSnap.data();
+  const existingProvIds: string[] = employeeData?.previousJobId || [];
 
-//   const generalDoc = snap.docs[0];
-//   const generalRef = doc(db, 'general', generalDoc.id);
+  const batch = writeBatch(db);
 
-//   const fileName = `profile_pictures/${empCode}_${Date.now()}`;
-//   const blob = bucket.file(fileName);
+  batch.set(jobRef, jobWithId);
+  batch.update(employeeRef, {
+    previousJobId: [...existingProvIds, jobRef.id],
+  });
 
-//   await new Promise<void>((resolve, reject) => {
-//     const blobStream = blob.createWriteStream({
-//       metadata: {
-//         contentType: file.mimetype,
-//       },
-//     });
+  await batch.commit();
 
-//     blobStream.on('error', reject);
+  return {
+    message: 'Previous job added successfully',
+    job: jobWithId,
+  };
+};
 
-//     blobStream.on('finish', resolve);
+export const editPreviousJob = async (jobId: string, updatedData: Partial<JOB>) => {
+  const jobRef = doc(previousCollection, jobId);
+  const jobSnap = await getDoc(jobRef);
 
-//     blobStream.end(file.buffer);
-//   });
+  if (!jobSnap.exists()) {
+    throw new Error('Previous job not found');
+  }
 
-//   const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+  await updateDoc(jobRef, updatedData);
 
-//   await updateDoc(generalRef, { profile: publicUrl });
-
-//   return publicUrl;
-// };
+  return {
+    message: 'Previous job updated successfully',
+    updatedFields: updatedData,
+    jobId,
+  };
+};

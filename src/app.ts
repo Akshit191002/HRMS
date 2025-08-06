@@ -3,14 +3,14 @@ import employeeRoutes from './routes/employee'
 import cors from "cors";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
-app.use(cors({credentials:true}))
+app.use(cors({ credentials: true }))
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use('/',employeeRoutes)
+app.use('/', employeeRoutes)
 
 
 app.listen(PORT, () => {
