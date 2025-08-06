@@ -221,4 +221,22 @@ route.patch('/employees/loan/:id', async (req, res) => {
   }
 })
 
+route.post('/employees/proviousJob/:id',async(req,res)=>{
+   try {
+    const bank = await employeeController.addPreviousJob(req.params.id, req.body)
+    res.status(201).json(bank);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+})
+
+route.patch('/employees/proviousJob/:id',async(req,res)=>{
+   try {
+    const bank = await employeeController.editPreviousJob(req.params.id, req.body)
+    res.status(201).json(bank);
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+})
+
 export default route;
